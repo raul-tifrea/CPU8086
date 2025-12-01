@@ -51,13 +51,33 @@ architecture Behavioral of InstructionFetch is
   signal PC_next : std_logic_vector(15 downto 0);
 
   type ROM_type is array (0 to 255) of std_logic_vector(15 downto 0);
+  
+  -- TEST PROGRAM STORED HERE
   signal ROM : ROM_type := (
-      0 => x"0000",
-      1 => x"0000",
-      2 => x"0000",
-      3 => x"0000",
-      4 => x"0000",
-      others => (others => '0')
+      -- 0. ADDI $1, $0, 3   -> Correct
+      0 => x"2823", 
+      
+      -- 1. ADDI $2, $0, 1   -> Correct
+      1 => x"2841",
+      
+      -- 2. ADD $3, $1, $2   -> Correct
+      2 => x"014C",
+      
+      -- 3. SW $3, 2($2)     -> Correct
+      3 => x"5262",
+      
+      -- 4. LW $4, 2($2)     -> FIXED (Was loading to R0)
+      -- Op:01001 Rs:010 Rt:100 Imm:00010 -> x4A82
+      4 => x"4A82",
+      
+      -- 5. BEQ $1, $2, 2    -> FIXED (Was checking R0 vs R5)
+      -- Op:01011 Rs:001 Rt:010 Imm:00010 -> x5942
+      5 => x"5942",
+      
+      -- 6. JUMP 0           -> Correct
+      6 => x"6800",
+      
+      others => x"0000"
   );
 
 begin
@@ -76,11 +96,9 @@ begin
   process(PC, PCsrc, branchAddress, jump, jumpAddress)
   begin
     PC_next <= std_logic_vector(unsigned(PC) + 1);
-
     if PCsrc = '1' then
       PC_next <= branchAddress;
     end if;
-
     if jump = '1' then
       PC_next <= jumpAddress;
     end if;

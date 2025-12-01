@@ -56,32 +56,32 @@ signal rd_idx : unsigned(2 downto 0);
 
 begin
 
-rs_idx <= unsigned(Instr(10 downto 8));
-rt_idx <= unsigned(Instr(7 downto 5));
-rd_idx <= unsigned(Instr(4 downto 2));
-
- 
-process(Instr, ExtOp)
-begin
-if ExtOp = '1' then
-    ExtImm <= (15 downto 8 => Instr(7)) & Instr(7 downto 0);
-else
-    ExtImm <= (15 downto 8 => '0') & Instr(7 downto 0);
-end if;
-end process;
-
-write_addr <= rt_idx when RegDst = '0' else rd_idx;
-
-process(clk)
-begin
-    if rising_edge(clk) then
-      if RegWrite = '1' then
-        reg_file(to_integer(write_addr)) <= WriteData;
-      end if;
-    end if;
-  end process;
+    rs_idx <= unsigned(Instr(10 downto 8));
+    rt_idx <= unsigned(Instr(7 downto 5));
+    rd_idx <= unsigned(Instr(4 downto 2));
+    
+    -- FIX: Use only bottom 5 bits for Immediate to avoid overlap with rt_idx
+    process(Instr, ExtOp)
+    begin
+        if ExtOp = '1' then
+            ExtImm <= (15 downto 5 => Instr(4)) & Instr(4 downto 0); -- Sign Extend
+        else
+            ExtImm <= (15 downto 5 => '0') & Instr(4 downto 0);      -- Zero Extend
+        end if;
+    end process;
+    
+    write_addr <= rt_idx when RegDst = '0' else rd_idx;
+    
+    process(clk)
+    begin
+        if rising_edge(clk) then
+          if RegWrite = '1' then
+            reg_file(to_integer(write_addr)) <= WriteData;
+          end if;
+        end if;
+    end process;
   
-ReadData1 <= reg_file(to_integer(rs_idx));
-ReadData2 <= reg_file(to_integer(rt_idx));
+    ReadData1 <= reg_file(to_integer(rs_idx));
+    ReadData2 <= reg_file(to_integer(rt_idx));
 
 end Behavioral;
