@@ -60,7 +60,6 @@ begin
     rt_idx <= unsigned(Instr(7 downto 5));
     rd_idx <= unsigned(Instr(4 downto 2));
     
-    -- FIX: Use only bottom 5 bits for Immediate to avoid overlap with rt_idx
     process(Instr, ExtOp)
     begin
         if ExtOp = '1' then

@@ -33,8 +33,8 @@ use ieee.numeric_std.all;
 
 entity MIPS_16_Top is
     Port ( clk  : in STD_LOGIC;
-           btnC : in STD_LOGIC;                    -- Button Center: Step Clock
-           btnR : in STD_LOGIC;                    -- Button Right: Reset
+           btnC : in STD_LOGIC;                    -- clock
+           btnR : in STD_LOGIC;                    -- reset
            sw   : in STD_LOGIC_VECTOR (15 downto 0); 
            led  : out STD_LOGIC_VECTOR (15 downto 0); 
            cat  : out STD_LOGIC_VECTOR (6 downto 0);
@@ -43,7 +43,7 @@ end MIPS_16_Top;
 
 architecture Behavioral of MIPS_16_Top is
 
-    -- COMPONENT DECLARATIONS
+    
     component debouncer
     Port ( clk : in STD_LOGIC;
            btn : in STD_LOGIC;
@@ -87,7 +87,6 @@ architecture Behavioral of MIPS_16_Top is
            ALUOp : out STD_LOGIC_VECTOR(3 downto 0));
     end component;
 
-    -- Note: Entity name is InstructionExecuteUnit, file is InstrExeUnit.vhd
     component InstructionExecuteUnit
     Port ( PCout : in STD_LOGIC_VECTOR(15 downto 0);
            RD1 : in STD_LOGIC_VECTOR(15 downto 0);
@@ -116,53 +115,38 @@ architecture Behavioral of MIPS_16_Top is
            cat : out STD_LOGIC_VECTOR(6 downto 0));
     end component;
 
-    -- SIGNALS
-    -- Data Paths
     signal Instruction, PC_out, PC_next : STD_LOGIC_VECTOR(15 downto 0);
     signal RD1, RD2, ExtImm, ALURes, MemData, ALUResOut, WriteData : STD_LOGIC_VECTOR(15 downto 0);
     signal BranchAddress, JumpTarget : STD_LOGIC_VECTOR(15 downto 0);
     signal DisplayData : STD_LOGIC_VECTOR(15 downto 0); -- What is currently on SSD
     
-    -- Control Signals
     signal RegWrite, RegDst, ExtOp, Jump, Branch, MemWrite, MemToReg, ALUSrc, Zero, PCSrc : STD_LOGIC;
     signal ALUOp : STD_LOGIC_VECTOR(3 downto 0);
     
-    -- Clocking
     signal cpu_clk : STD_LOGIC;
     signal reset_signal : STD_LOGIC;
 
 begin
 
-    -- Reset mapping
     reset_signal <= btnR;
     
-    -- Jump Target Logic: Concatenate PC top 3 bits with Instruction lower 13 bits
-    -- FIX: Use only the bottom 11 bits for target, preserve top 5 bits of PC
     JumpTarget <= PC_out(15 downto 11) & Instruction(10 downto 0);
 
-    -- Branch Logic
     PCSrc <= Branch and Zero;
 
-    -- WriteBack MUX
     WriteData <= MemData when MemToReg = '1' else ALUResOut;
 
-    -- =========================================================================
-    --                               PORT MAPPING
-    -- =========================================================================
-
-    -- Debouncer (Center Button -> CPU Clock)
     Debouncer_Unit: debouncer port map (
         clk => clk, 
         btn => btnC,
         enable => cpu_clk 
     );
 
-    -- MODIFY THIS SECTION IN MIPS_16_Top.vhd
-
+    
     IF_Unit: InstructionFetch port map (
         we => '1',
         reset => reset_signal,
-        clk => not cpu_clk, -- CHANGE THIS LINE: Add "not"
+        clk => not cpu_clk, 
         branchAddress => BranchAddress,
         jumpAddress => JumpTarget,
         PCsrc => PCSrc,
@@ -217,59 +201,45 @@ begin
         ALUResOut => ALUResOut
     );
 
-    -- =========================================================================
-    --                           DEBUGGING / DISPLAY LOGIC
-    -- =========================================================================
-
-    -- 1. SSD DATA SELECTOR (Multiplexer controlled by sw[2:0])
     process(sw(2 downto 0), Instruction, PC_out, RD1, RD2, ExtImm, ALURes, MemData, WriteData)
     begin
         case sw(2 downto 0) is
-            when "000" => DisplayData <= Instruction; -- Instruction from memory
-            when "001" => DisplayData <= PC_out;      -- Program Counter
-            when "010" => DisplayData <= RD1;         -- Register Read 1
-            when "011" => DisplayData <= RD2;         -- Register Read 2
-            when "100" => DisplayData <= ExtImm;      -- Extended Immediate
-            when "101" => DisplayData <= ALURes;      -- ALU Result
-            when "110" => DisplayData <= MemData;     -- Memory Read Data
-            when "111" => DisplayData <= WriteData;   -- Data being written back
+            when "000" => DisplayData <= Instruction; 
+            when "001" => DisplayData <= PC_out;      
+            when "010" => DisplayData <= RD1;         
+            when "011" => DisplayData <= RD2;         
+            when "100" => DisplayData <= ExtImm;      
+            when "101" => DisplayData <= ALURes;      
+            when "110" => DisplayData <= MemData;     
+            when "111" => DisplayData <= WriteData;   
             when others => DisplayData <= x"FFFF"; 
         end case;
     end process;
 
-    -- 2. SSD DRIVER
-    -- We pad DisplayData with 0s because SSD expects 32 bits (8 hex digits), 
-    -- but we only have 4 hex digits (16 bits) of data.
-    -- 2. SSD DRIVER
-    -- FIX: SSD.vhd reads bits 31 downto 16. We must put DisplayData there.
     SSD_Unit: SSD port map (
         clk => clk, 
-        digits => DisplayData & x"0000", -- CHANGED THIS LINE (Swapped order)
+        digits => DisplayData & x"0000",
         an => an,
         cat => cat
     );
 
-    -- 3. LED DRIVER (Controlled by sw[15])
-    -- sw[15] = 0 -> LEDs show the 16-bit value currently on the SSD.
-    -- sw[15] = 1 -> LEDs show Control Signals (RegWrite, Branch, etc.)
     process(sw(15), DisplayData, RegWrite, MemWrite, Branch, Jump, Zero, MemToReg, ALUSrc, ExtOp, ALUOp, PCSrc, cpu_clk)
     begin
         if sw(15) = '0' then
-            led <= DisplayData; -- Normal Data View
+            led <= DisplayData; 
         else
-            -- Control Signal View
-            led <= (others => '0'); -- Clear all first
+            led <= (others => '0');
             led(0) <= RegWrite;
             led(1) <= MemWrite;
             led(2) <= Branch;
             led(3) <= Jump;
-            led(4) <= PCSrc;    -- Real branch decision (Zero AND Branch)
+            led(4) <= PCSrc;   
             led(5) <= Zero;
             led(6) <= MemToReg;
             led(7) <= ALUSrc;
             led(8) <= ExtOp;
-            led(11 downto 9) <= ALUOp(2 downto 0); -- Show 3 bits of ALUOp
-            led(15) <= cpu_clk; -- Show clock pulse on top LED
+            led(11 downto 9) <= ALUOp(2 downto 0); 
+            led(15) <= cpu_clk; 
         end if;
     end process;
 
